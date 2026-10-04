@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local environment files (secrets) — never commit
+.env
+.env.*
+!.env.example
+
+# Credential / token stores (Gmail OAuth, future providers) — never commit
+secrets/
+*.token.json
+gmail_token.json
+gmail_credentials.json
+# Google OAuth client downloads default to this filename pattern
+client_secret*.json
+
+# Local SQLite database (Phase 4C) and its journal/WAL sidecars — never commit
+data/*.db
+data/*.db-*
+
+# Packaging / build artifacts
+build/
+dist/
+sdist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Test / coverage tooling
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# Type checkers / linters / formatters
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.dmypy.json
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
