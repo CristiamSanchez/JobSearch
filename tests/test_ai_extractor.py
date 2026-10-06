@@ -103,6 +103,39 @@ def test_extract_accepts_markdown_fenced_json() -> None:
     assert make_extractor(opener).extract("body") == VALID_EXTRACTION
 
 
+def test_openai_compatible_provider_envelope_is_accepted() -> None:
+    """A full Gemini-style OpenAI-compatible envelope parses unchanged.
+
+    The endpoint is selected by configuration, so the transport must stay
+    tolerant of the extra fields a real provider adds (``id``, ``object``,
+    ``created``, ``model``, ``index``, ``finish_reason``, ``usage``) and
+    of fenced JSON in the content.
+    """
+    envelope = {
+        "id": "chatcmpl-abc123",
+        "object": "chat.completion",
+        "created": 1_759_700_000,
+        "model": "gemini-3.8-flash",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": f"```json\n{json.dumps(VALID_EXTRACTION)}\n```",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 60,
+            "total_tokens": 180,
+        },
+    }
+    opener = RecordingOpener(json.dumps(envelope).encode("utf-8"))
+    assert make_extractor(opener).extract("body") == VALID_EXTRACTION
+
+
 def test_extractor_endpoint_property_has_no_secret() -> None:
     extractor = make_extractor(RecordingOpener())
     assert extractor.endpoint == f"{BASE_URL}/chat/completions"

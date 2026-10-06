@@ -27,6 +27,8 @@ SOURCE_MODULES = (
     "src/jobsearch/job_email_detector.py",
     "src/jobsearch/gmail_sync.py",
     "src/jobsearch/ai_extractor.py",
+    "src/jobsearch/gmail_check.py",
+    "src/jobsearch/ai_check.py",
 )
 
 JOB_BOARD_NAMES = (

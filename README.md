@@ -1274,7 +1274,7 @@ each one with safe placeholders.
 ### 5. How to run the manual sync
 
 ```bash
-# one-time setup: uncomment the Google client libraries in requirements.txt
+# one-time setup: install the Google client libraries listed in requirements.txt
 pip install -r requirements.txt
 
 PYTHONPATH=src .venv/bin/python -m jobsearch.gmail_sync
@@ -1323,6 +1323,60 @@ scheduling remains a future phase.
 Nothing is synchronized to Notion; the sync's destination is the local
 SQLite database only. Notion remains a separate future phase (5B).
 
+### 10. Validate Gmail OAuth before configuring the AI key
+
+`src/jobsearch/gmail_check.py` is a small development utility — not part
+of the production sync, which is unchanged — for validating real OAuth
+authorization and read-only Gmail connectivity **without** `AI_API_KEY`:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m jobsearch.gmail_check
+```
+
+It reuses the existing `build_gmail_service()`: on the first run a browser
+opens for consent and `secrets/gmail_token.json` is created (later runs
+reuse the token). Then it issues exactly one read-only request,
+`users.messages.list(userId="me", maxResults=1)`, and prints only safe
+information: authentication status, API status, and the reference count.
+
+It never fetches message bodies, never runs AI extraction, never opens the
+database, and requires no `AI_API_KEY`. Exit codes: `0` verified, `2`
+configuration/OAuth problem, `1` API or unexpected failure. Offline
+coverage lives in `tests/test_gmail_check.py` (mocked service and OAuth
+flow).
+
+### 11. Validate the AI extractor in isolation (for example Gemini)
+
+`src/jobsearch/ai_check.py` is a small development utility — also not
+part of the production sync — that exercises **only** the existing
+`AIExtractor`: it builds it from the provider-agnostic `AI_API_KEY`,
+`AI_BASE_URL`, `AI_MODEL` and `AI_TIMEOUT_SECONDS` settings and asks it
+to extract fields from one hardcoded sample job description. No Gmail
+call, no database, nothing persisted:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m jobsearch.ai_check
+```
+
+The provider is chosen purely by configuration, so validating Gemini
+needs no code change and no SDK: point the check at Gemini's
+OpenAI-compatible endpoint. Keep the key in `.env` (never on the command
+line, where it would land in your shell history) and override only the
+two non-secret values:
+
+```bash
+# .env must contain:  AI_API_KEY=<your Gemini API key>
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+AI_MODEL=gemini-3.8-flash \
+PYTHONPATH=src .venv/bin/python -m jobsearch.ai_check
+```
+
+Exit codes: `0` extraction succeeded, `2` missing/invalid AI
+configuration, `1` endpoint or response failure. The report never
+contains the API key. Offline coverage lives in `tests/test_ai_check.py`
+(fake transport) plus the provider-envelope test in
+`tests/test_ai_extractor.py`.
+
 ### What Phase 6A does NOT implement
 
 No scheduler, no Notion, no application entity, no dashboard changes, no
@@ -1355,30 +1409,172 @@ Each phase starts only after the previous one is stable.
 
 ## Getting started
 
+Everything below runs locally: no container, no database server, and no
+cloud service. The test suite needs nothing beyond `pytest`.
+
 ### Requirements
 
-- Python 3.12+
+- Python 3.12+ (developed and tested on 3.12.3)
 
-### Setup
+### Installation and setup
 
 ```bash
+cd JobSearch
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
+```
 
+`requirements.txt` lists the optional Google client libraries used only by
+the real Gmail sync (`jobsearch.gmail.build_gmail_service` imports them
+lazily); they are enabled there. AI extraction needs **no package at all**
+— it is standard-library HTTP. `requirements-dev.txt` holds `pytest`, the
+only development dependency.
+
+### Python virtual environment
+
+All commands assume the environment created above. The package is **not
+installed into it** (the `src/` layout is used directly), which means:
+
+- `pytest` works out of the box — `pyproject.toml` puts `src/` on the
+  test path;
+- every manual command must be prefixed with `PYTHONPATH=src`, for
+  example `PYTHONPATH=src .venv/bin/python -m jobsearch.dashboard`.
+
+### Configure `.env`
+
+```bash
 cp .env.example .env   # then edit values as needed
 ```
 
-To talk to the real Gmail API (the Phase 6A manual sync), additionally
-install the optional Google client libraries listed (commented) in
-`requirements.txt`, place your OAuth files under `secrets/`, and set
-`AI_API_KEY` in `.env`. The test suite never needs any of them.
+`.env` is git-ignored and holds local values and secrets only. Variables
+already present in the real environment always take precedence over
+values in `.env`. See [Configuration](#configuration) for the complete
+variable table.
+
+### Configure Gemini (OpenAI-compatible endpoint)
+
+AI extraction calls any OpenAI-compatible chat-completions endpoint over
+standard-library HTTP — no SDK and no vendor lock-in. Gemini exposes such
+an endpoint, so it is configured, never coded:
+
+```bash
+# in .env  (never committed)
+# .env does NOT support inline comments — keep comments on their own line
+#
+# Get a key at https://aistudio.google.com/apikey
+AI_API_KEY=PASTE_YOUR_GEMINI_API_KEY
+AI_MODEL=gemini-3.8-flash
+# raise the timeout if the model thinks for a while (1-600 seconds)
+AI_TIMEOUT_SECONDS=60
+```
+
+```bash
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+PYTHONPATH=src .venv/bin/python -m jobsearch.ai_check
+```
+
+- Keep `AI_API_KEY` **in `.env` only**: never pass it on the command
+  line, where it would land in your shell history.
+- Inline variables override `.env`, so `AI_BASE_URL` can stay at its
+  default locally and be pointed at Gemini for one run, as above.
+- Validate the connection with the isolated check before running a sync
+  (see *Phase 6A, section 11* for details and failure modes).
+
+### Set up Gmail OAuth (read-only)
+
+One-time setup in the Google Cloud console:
+
+1. Create a project and **enable the Gmail API**.
+2. Configure the **OAuth consent screen** and add your Google account as
+   a **test user** while the app is in *Testing*.
+3. Create an **OAuth client ID of type "Desktop app"** and download the
+   JSON file.
+4. Save it as `secrets/gmail_credentials.json` (the default path, kept
+   outside Git) or point `GMAIL_CREDENTIALS_FILE` at it.
+
+The only scope requested is
+`https://www.googleapis.com/auth/gmail.readonly`: nothing is ever sent,
+deleted, modified, or marked as read. The first command that needs it
+opens your browser for consent and writes the cached token to
+`secrets/gmail_token.json` (also git-ignored). Step-by-step detail in
+*Phase 6A, section 3*.
 
 ### Run the tests
 
 ```bash
-pytest
+pytest                        # with the virtual environment activated
+.venv/bin/python -m pytest    # equivalent, without activating
 ```
+
+The suite is fully offline: Gmail, OAuth, and the AI endpoint are always
+mocked, and tests use in-memory or temporary databases. No API key,
+credential, or network access is ever required.
+
+### Run the isolated AI check
+
+Exercises **only** the AI extractor against the configured endpoint with
+one hardcoded sample job description: no Gmail call, no database, nothing
+persisted.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m jobsearch.ai_check
+# 0 = extracted · 2 = missing/invalid AI configuration · 1 = endpoint failure
+```
+
+### Run the Gmail OAuth connectivity check
+
+Validates real OAuth authorization and read-only Gmail connectivity
+**without** `AI_API_KEY`: on the first run the browser opens for
+consent, then exactly one `users.messages.list(userId="me", maxResults=1)`
+request is issued. No message bodies are read.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m jobsearch.gmail_check
+# 0 = verified · 2 = configuration/OAuth problem · 1 = API failure
+```
+
+### Run the Gmail sync
+
+Pulls the messages matching `GMAIL_QUERY` **once, on demand**, through
+the whole pipeline (detect → extract → analyze → persist, workflow
+status `FOUND`):
+
+```bash
+PYTHONPATH=src .venv/bin/python -m jobsearch.gmail_sync
+# 0 = completed · 2 = configuration/OAuth error · 1 = operational failure
+```
+
+Nothing runs in the background: there is no scheduler, cron, worker, or
+polling loop. Re-running it is idempotent (already-analyzed messages are
+skipped before extraction). See *Phase 6A, section 5*.
+
+### Run the dashboard
+
+```bash
+PYTHONPATH=src .venv/bin/python -m jobsearch.dashboard
+# → JobSearch AI Command Center → http://127.0.0.1:8000
+```
+
+Binds to loopback only; override with `DASHBOARD_HOST` / `DASHBOARD_PORT`.
+Stop it with `Ctrl+C`. See *MVP Command Center (Phase 5)*.
+
+### Security notes
+
+| Asset | Location | Protection |
+|-------|----------|------------|
+| `.env` (API key, paths) | repository root | git-ignored (`.env`, `.env.*`); never commit it and never pass secrets on the command line; `AI_API_KEY` is excluded from `repr()` output |
+| Gmail OAuth client JSON | `secrets/gmail_credentials.json` | the whole `secrets/` directory is git-ignored; its contents are never printed or logged |
+| Gmail OAuth token | `secrets/gmail_token.json` | git-ignored (also `*.token.json`); delete it to revoke and sign in again; issued for the read-only scope only |
+| SQLite database | `data/jobsearch.db` | `data/*.db` and `data/*.db-*` are git-ignored; the test suite never touches it (in-memory or temporary databases instead) |
+
+- `.env.example` contains placeholders only, and the test suite scans it
+  for credential-like markers.
+- No credential, key, or token is ever printed, logged, or committed:
+  error messages name configuration variables, never values, and the
+  `Settings` representation hides `AI_API_KEY`.
+- The dashboard is a local MVP — loopback bind, no authentication, no
+  deployment infrastructure.
 
 ## Manual job ingestion
 
