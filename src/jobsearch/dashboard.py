@@ -47,22 +47,180 @@ _STATUS_PATH = re.compile(r"/job/(\d+)")
 _STATUS_ACTION_PATH = re.compile(r"/job/(\d+)/status")
 
 _STYLE = """
-  body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 70rem;
-         padding: 0 1rem; color: #1a1a2e; }
-  h1 { font-size: 1.4rem; }
-  h2 { font-size: 1.1rem; }
-  a { color: #0b5ed7; }
-  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-  th, td { border: 1px solid #d0d0da; padding: 0.45rem 0.6rem; text-align: left; }
-  th { background: #f2f3f7; }
-  td.num { text-align: right; white-space: nowrap; }
-  nav a { margin-right: 0.8rem; text-decoration: none; }
-  nav a.active { font-weight: bold; text-decoration: underline; }
-  .muted { color: #666; }
-  .status-form select, .status-form button { font: inherit; padding: 0.15rem 0.3rem; }
-  dl { display: grid; grid-template-columns: 12rem 1fr; gap: 0.35rem 1rem; }
-  dt { font-weight: 600; }
-  ul { margin: 0.2rem 0 0.6rem; padding-left: 1.2rem; }
+:root {
+  --bg: #f4f6f9; --surface: #fff; --border: #e3e7ee;
+  --text: #182230; --muted: #667085; --accent: #2f5bd8;
+  --ok-bg: #e6f6ec;    --ok-ink: #12724a;
+  --bad-bg: #fdeceb;   --bad-ink: #b42318;
+  --warn-bg: #fdf4e5;  --warn-ink: #8a4b06;
+  --info-bg: #eaf0ff;  --info-ink: #2447a8;
+  --indigo-bg: #e9ecfd; --indigo-ink: #34409b;
+  --violet-bg: #f1edfd; --violet-ink: #5a3fc0;
+  --teal-bg: #e4f5f2;  --teal-ink: #0e6b61;
+  --neutral-bg: #eef1f5; --neutral-ink: #475467;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto,
+             Helvetica, Arial, sans-serif;
+       -webkit-text-size-adjust: 100%; }
+.wrap { max-width: 74rem; margin: 0 auto; padding: 0 1.25rem; }
+main.wrap { padding-top: 1.5rem; padding-bottom: 3rem; }
+a { color: var(--accent); }
+h1 { font-size: 1.15rem; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+     letter-spacing: .07em; color: var(--muted); margin: 0; }
+.muted { color: var(--muted); }
+.num-txt { font-variant-numeric: tabular-nums; }
+
+/* Top bar */
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); }
+.topbar-inner { display: flex; align-items: baseline; gap: .7rem;
+                padding: 1rem 1.25rem; flex-wrap: wrap; }
+.topbar-sub { margin: 0; color: var(--muted); font-size: .8rem; }
+
+/* Stat cards */
+.stats { display: grid; grid-template-columns:
+         repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .7rem;
+         margin-bottom: 1.1rem; }
+.stat { background: var(--surface); border: 1px solid var(--border);
+        border-radius: 10px; padding: .8rem .95rem; }
+.stat-label { display: block; font-size: .68rem; font-weight: 700;
+              letter-spacing: .07em; text-transform: uppercase;
+              color: var(--muted); }
+.stat-value { display: block; font-size: 1.55rem; font-weight: 650;
+              line-height: 1.2; font-variant-numeric: tabular-nums;
+              margin-top: .1rem; }
+.stat-note { display: block; font-size: .76rem; color: var(--muted); }
+
+/* Filter chips */
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; }
+.chip { position: relative; display: inline-flex; align-items: center;
+        gap: .32rem; background: var(--surface); border: 1px solid var(--border);
+        border-radius: 999px; padding: .28rem .68rem; font-size: .82rem; }
+.chip a { color: var(--text); text-decoration: none; font-weight: 500; }
+.chip a::after { content: ""; position: absolute; inset: 0;
+                 border-radius: 999px; }
+.chip a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip-n { color: var(--muted); font-size: .73rem; font-weight: 600;
+          font-variant-numeric: tabular-nums; }
+.chip.is-active { background: var(--text); border-color: var(--text); }
+.chip.is-active a { color: #fff; }
+.chip.is-active .chip-n { color: rgba(255, 255, 255, .78); }
+
+/* Panel + table */
+.panel { background: var(--surface); border: 1px solid var(--border);
+         border-radius: 12px; overflow: hidden; }
+.panel-head { display: flex; justify-content: space-between; align-items: center;
+              gap: 1rem; padding: .8rem 1rem;
+              border-bottom: 1px solid var(--border); }
+.panel-count { font-size: .78rem; color: var(--muted);
+               font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .875rem; }
+th, td { text-align: left; padding: .7rem .9rem; vertical-align: top;
+         border-bottom: 1px solid var(--border); }
+th { background: #fafbfc; font-size: .68rem; font-weight: 700;
+     text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+     white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: #fafbfd; }
+td.num, th.num { text-align: right; white-space: nowrap; font-weight: 650;
+                 font-variant-numeric: tabular-nums; }
+
+/* Job cell */
+.jid { display: inline-block; font-family: ui-monospace, SFMono-Regular,
+       Menlo, Consolas, monospace; font-size: .66rem; color: var(--muted);
+       background: var(--neutral-bg); border-radius: 4px;
+       padding: .04rem .34rem; margin-bottom: .18rem; }
+.job-title { display: block; font-weight: 600; color: var(--text);
+             text-decoration: none; }
+.job-title:hover { color: var(--accent); text-decoration: underline; }
+.job-sub { display: block; color: var(--muted); font-size: .8rem;
+           margin-top: .08rem; }
+
+/* Badges */
+.badge { display: inline-block; padding: .16rem .5rem; border-radius: 999px;
+         font-size: .68rem; letter-spacing: .04em; white-space: nowrap;
+         border: 1px solid transparent; }
+.badge strong { font-weight: 700; }
+.tone-ok { background: var(--ok-bg); color: var(--ok-ink); }
+.tone-bad { background: var(--bad-bg); color: var(--bad-ink); }
+.tone-warn { background: var(--warn-bg); color: var(--warn-ink); }
+.tone-info { background: var(--info-bg); color: var(--info-ink); }
+.tone-indigo { background: var(--indigo-bg); color: var(--indigo-ink); }
+.tone-violet { background: var(--violet-bg); color: var(--violet-ink); }
+.tone-teal { background: var(--teal-bg); color: var(--teal-ink); }
+.tone-neutral { background: var(--neutral-bg); color: var(--neutral-ink); }
+
+/* Status action */
+.status-form { display: inline-flex; gap: .35rem; align-items: center; }
+.status-form select, .status-form button {
+  font: inherit; font-size: .78rem; padding: .28rem .5rem;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--text); }
+.status-form button { background: var(--text); border-color: var(--text);
+                      color: #fff; font-weight: 600; padding: .28rem .7rem;
+                      cursor: pointer; }
+.status-form button:hover { background: var(--accent); border-color: var(--accent); }
+.status-form select:focus-visible, .status-form button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Empty state */
+.empty { padding: 2.5rem 1.5rem; text-align: center; }
+.empty-title { margin: 0 0 .45rem; font-size: 1rem; font-weight: 650; }
+.empty-text { margin: 0 auto .5rem; max-width: 42rem; color: var(--muted);
+              font-size: .88rem; }
+.empty-hint { margin: 0; font-size: .8rem; }
+
+/* Detail view */
+.back { margin: 0 0 .9rem; font-size: .85rem; }
+.back a { text-decoration: none; }
+.back a:hover { text-decoration: underline; }
+.detail-head { background: var(--surface); border: 1px solid var(--border);
+               border-radius: 12px; padding: 1.05rem 1.2rem;
+               margin-bottom: 1rem; }
+.detail-head h1 { font-size: 1.3rem; margin: .35rem 0 .7rem; }
+.badges { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.cols { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 900px) { .cols { grid-template-columns: 1.05fr .95fr; } }
+.card { background: var(--surface); border: 1px solid var(--border);
+        border-radius: 12px; padding: 1.05rem 1.2rem; }
+dl { display: grid; grid-template-columns: 10rem 1fr; gap: .5rem 1rem;
+     margin: .8rem 0 0; font-size: .875rem; }
+dt { color: var(--muted); font-weight: 600; }
+dd { margin: 0; word-break: break-word; }
+ul { margin: .3rem 0 .9rem; padding-left: 1.15rem; font-size: .875rem; }
+li { margin-bottom: .15rem; }
+.reasons { margin: .4rem 0 0; padding-left: 1rem; font-size: .78rem;
+           line-height: 1.5; color: var(--muted); }
+.evidence-head { font-size: .8rem; font-weight: 650; margin: .9rem 0 .1rem; }
+.note { font-size: .78rem; color: var(--muted); margin-top: 1rem; }
+
+/* Error page */
+.error-card { max-width: 34rem; margin: 4rem auto; text-align: center; }
+.error-card h1 { font-size: 1.2rem; margin-bottom: .5rem; }
+
+/* Responsive: rows become stacked cards on small screens */
+@media (max-width: 760px) {
+  .table-wrap table, .table-wrap tbody, .table-wrap tr,
+  .table-wrap td { display: block; width: 100%; }
+  .table-wrap thead { display: none; }
+  .table-wrap tr { border-bottom: 1px solid var(--border); padding: .45rem 0; }
+  .table-wrap tr:last-child { border-bottom: 0; }
+  .table-wrap td { border-bottom: 0; padding: .3rem .9rem; display: flex;
+                   gap: 1rem; justify-content: space-between;
+                   align-items: center; text-align: left; }
+  .table-wrap td::before { content: attr(data-label); flex: 0 0 auto;
+                           color: var(--muted); font-size: .66rem;
+                           font-weight: 700; letter-spacing: .06em;
+                           text-transform: uppercase; }
+  .table-wrap td.num::before { content: "Match"; }
+  .table-wrap td:first-child { display: block; padding-top: .85rem; }
+  .table-wrap td:first-child::before { content: none; }
+  dl { grid-template-columns: 1fr; }
+  dl dt { margin-top: .5rem; }
+}
 """
 
 
@@ -97,17 +255,97 @@ def _status_form(job: DashboardJob) -> str:
     )
 
 
-def _filter_nav(current: WorkflowStatus | None) -> str:
-    links = ['<a href="/"{}>All</a>'.format(
-        ' class="active"' if current is None else ""
-    )]
-    for item in WORKFLOW_ORDER:
-        active = ' class="active"' if current is item else ""
-        links.append(
-            f'<a href="/?status={item.value}"{active}>'
-            f"{item.value.capitalize()}</a>"
+# Badge tones — presentation only: a colour never changes eligibility,
+# the score, or the workflow status.
+_ELIGIBILITY_TONE = {
+    "ELIGIBLE": "ok",
+    "NOT_ELIGIBLE": "bad",
+    "REVIEW_REQUIRED": "warn",
+    "UNKNOWN": "neutral",
+}
+
+_STATUS_TONE = {
+    "FOUND": "info",
+    "REVIEWED": "indigo",
+    "SAVED": "teal",
+    "APPLIED": "violet",
+    "INTERVIEW": "warn",
+    "OFFER": "ok",
+    "REJECTED": "bad",
+    "CLOSED": "neutral",
+}
+
+
+def _badge(value: str, mapping: dict[str, str]) -> str:
+    """A small status chip; the literal value stays readable inside it."""
+    tone = mapping.get(value, "neutral")
+    return f'<span class="badge tone-{tone}"><strong>{_esc(value)}</strong></span>'
+
+
+def _job_subline(job: DashboardJob) -> str:
+    """``Company · Location`` under the title, or a dash when neither exists."""
+    parts = [_esc(part) for part in (job.company, job.location) if part]
+    if not parts:
+        return '<span class="muted">—</span>'
+    return " · ".join(parts)
+
+
+def _stat_cards(overview: tuple[DashboardJob, ...]) -> str:
+    """Overview counters — counted from the whole eligible set, not a filter."""
+    counts: dict[str, int] = {}
+    for job in overview:
+        counts[job.status.value] = counts.get(job.status.value, 0) + 1
+    cards = (
+        ("Total", len(overview), "eligible jobs"),
+        ("Found", counts.get("FOUND", 0), "awaiting your review"),
+        ("Applied", counts.get("APPLIED", 0), "application submitted"),
+        ("Interview", counts.get("INTERVIEW", 0), "company responded"),
+        ("Offer", counts.get("OFFER", 0), "offer received"),
+    )
+    cells = "".join(
+        '<div class="stat">'
+        f'<span class="stat-label">{label}</span>'
+        f'<span class="stat-value">{value}</span>'
+        f'<span class="stat-note">{note}</span>'
+        "</div>"
+        for label, value, note in cards
+    )
+    return f'<section class="stats" aria-label="Summary">{cells}</section>'
+
+
+def _filter_nav(
+    current: WorkflowStatus | None, overview: tuple[DashboardJob, ...]
+) -> str:
+    """Status chips with live counts; ``/`` is the unfiltered "All"."""
+    counts: dict[str, int] = {}
+    for job in overview:
+        counts[job.status.value] = counts.get(job.status.value, 0) + 1
+
+    def chip(href: str, label: str, count: int, active: bool) -> str:
+        wrapper = "chip is-active" if active else "chip"
+        aria = ' aria-current="page"' if active else ""
+        return (
+            f'<span class="{wrapper}">'
+            f'<a href="{href}"{aria}>{label}</a>'
+            f'<span class="chip-n">{count}</span>'
+            "</span>"
         )
-    return "<nav>" + "".join(links) + "</nav>"
+
+    links = [chip("/", "All", len(overview), current is None)]
+    for item in WORKFLOW_ORDER:
+        links.append(
+            chip(
+                f"/?status={item.value}",
+                item.value.capitalize(),
+                counts.get(item.value, 0),
+                current is item,
+            )
+        )
+    return (
+        '<nav class="chips" aria-label="Filter by workflow status">'
+        + "".join(links)
+        + "</nav>"
+    )
 
 
 def _page(title: str, body: str) -> str:
@@ -124,45 +362,101 @@ def _page(title: str, body: str) -> str:
 
 
 def render_index(
-    jobs: tuple[DashboardJob, ...], current: WorkflowStatus | None = None
+    jobs: tuple[DashboardJob, ...],
+    current: WorkflowStatus | None = None,
+    all_jobs: tuple[DashboardJob, ...] | None = None,
 ) -> str:
-    """The primary table: eligible jobs, ID → Position → Company → … → Status."""
-    heading = (
+    """The primary view: summary cards, status chips, then the job table.
+
+    ``jobs`` is what to display (the store has already applied the
+    eligibility and status filters); ``all_jobs`` is the unfiltered eligible
+    set, used only to count the cards and chips so they stay correct while a
+    filter is active. It defaults to ``jobs``, so ``render_index(rows)``
+    counts exactly what it is given.
+    """
+    overview = jobs if all_jobs is None else all_jobs
+    topbar = (
+        '<header class="topbar"><div class="wrap topbar-inner">'
         "<h1>Job Search Command Center</h1>"
-        f"{_filter_nav(current)}"
-        '<p class="muted">Eligible jobs only · source of truth: SQLite</p>'
+        '<p class="topbar-sub">Eligible jobs only · source of truth: SQLite</p>'
+        "</div></header>"
+    )
+    intro = _stat_cards(overview) + _filter_nav(current, overview)
+    count_label = "job" if len(jobs) == 1 else "jobs"
+    scope = "" if current is None else f" · {current.value}"
+    panel_head = (
+        '<div class="panel-head"><h2>Jobs</h2>'
+        f'<span class="panel-count">{len(jobs)} {count_label}{scope}</span></div>'
     )
 
     if not jobs:
-        empty = (
-            "No eligible jobs yet."
-            if current is None
-            else f'No eligible jobs with status <strong>{current.value}</strong>.'
+        if current is None:
+            title = "No eligible jobs yet."
+            text = (
+                '<p class="empty-text">Jobs appear here after the Gmail sync, '
+                "AI extraction and analysis — and only when the eligibility "
+                "result is <strong>ELIGIBLE</strong>.</p>"
+                '<p class="empty-hint muted">Every processed job is still '
+                "stored in SQLite with its full analysis; it is simply not "
+                "listed here.</p>"
+            )
+        else:
+            title = (
+                f"No eligible jobs with status <strong>{current.value}</strong>."
+            )
+            text = (
+                '<p class="empty-text">No eligible job is currently in this '
+                "step of the workflow.</p>"
+                '<p class="empty-hint muted">Pick another status above, or '
+                "select <strong>All</strong> to see the whole list.</p>"
+            )
+        return _page(
+            "Command Center",
+            topbar
+            + '<main class="wrap">'
+            + intro
+            + '<div class="panel">'
+            + panel_head
+            + f'<div class="empty"><p class="empty-title">{title}</p>{text}</div>'
+            + "</div></main>",
         )
-        return _page("Command Center", heading + f"<p>{empty}</p>")
 
     rows = []
     for job in jobs:
         rows.append(
             "<tr>"
-            f'<td><a href="/job/{job.job_id}">JOB-{job.job_id}</a></td>'
-            f'<td><a href="/job/{job.job_id}">{_esc(job.title)}</a></td>'
-            f"<td>{_esc(job.company)}</td>"
-            f"<td>{_esc(job.location)}</td>"
+            '<td data-label="Job">'
+            f'<span class="jid">JOB-{job.job_id}</span>'
+            f'<a class="job-title" href="/job/{job.job_id}">{_esc(job.title)}</a>'
+            f'<span class="job-sub">{_job_subline(job)}</span>'
+            "</td>"
+            f'<td data-label="Eligibility">'
+            f"{_badge(job.eligibility.value, _ELIGIBILITY_TONE)}</td>"
             f'<td class="num">{job.match_percent}%</td>'
-            f"<td><strong>{job.status.value}</strong></td>"
-            f"<td>{_status_form(job)}</td>"
+            f'<td data-label="Status">'
+            f"{_badge(job.status.value, _STATUS_TONE)}</td>"
+            f'<td data-label="Change">{_status_form(job)}</td>'
             "</tr>"
         )
     table = (
-        "<table>"
-        "<thead><tr><th>ID</th><th>Position</th><th>Company</th>"
-        "<th>Location</th><th>Match</th><th>Status</th><th>Change status</th>"
+        '<div class="table-wrap"><table>'
+        "<thead><tr>"
+        "<th>Job</th><th>Eligibility</th>"
+        '<th class="num">Match</th><th>Status</th><th>Change status</th>'
         "</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
-        "</table>"
+        "</table></div>"
     )
-    return _page("Command Center", heading + table)
+    return _page(
+        "Command Center",
+        topbar
+        + '<main class="wrap">'
+        + intro
+        + '<div class="panel">'
+        + panel_head
+        + table
+        + "</div></main>",
+    )
 
 
 def render_detail(job: DashboardJob) -> str:
@@ -173,7 +467,8 @@ def render_detail(job: DashboardJob) -> str:
         remote_mode = '<span class="muted">—</span>'
 
     reasons = (
-        "<ul>" + "".join(f"<li>{_esc(r)}</li>" for r in job.eligibility_reasons)
+        '<ul class="reasons">'
+        + "".join(f"<li>{_esc(r)}</li>" for r in job.eligibility_reasons)
         + "</ul>"
         if job.eligibility_reasons
         else ""
@@ -192,8 +487,19 @@ def render_detail(job: DashboardJob) -> str:
     )
 
     body = (
-        '<p><a href="/">&larr; Dashboard</a></p>'
-        f"<h1>JOB-{job.job_id} · {_esc(job.title)}</h1>"
+        '<main class="wrap">'
+        f'<p class="back"><a href="/">&larr; Back to dashboard</a></p>'
+        '<header class="detail-head">'
+        f'<span class="jid">JOB-{job.job_id}</span>'
+        f"<h1>{_esc(job.title)}</h1>"
+        '<div class="badges">'
+        f"{_badge(job.eligibility.value, _ELIGIBILITY_TONE)}"
+        f"{_badge(job.status.value, _STATUS_TONE)}"
+        f"{_status_form(job)}"
+        "</div>"
+        "</header>"
+        '<div class="cols">'
+        '<section class="card"><h2>Overview</h2>'
         "<dl>"
         f"<dt>Job ID</dt><dd>JOB-{job.job_id}</dd>"
         f"<dt>Position</dt><dd>{_esc(job.title)}</dd>"
@@ -203,27 +509,37 @@ def render_detail(job: DashboardJob) -> str:
         f"<dt>Professional Match</dt>"
         f"<dd>{job.match_percent}% <span class=\"muted\">"
         f"(score {job.score})</span></dd>"
-        f"<dt>Eligibility</dt><dd><strong>{job.eligibility.value}</strong>"
-        f"{reasons}</dd>"
-        f"<dt>Workflow Status</dt><dd><strong>{job.status.value}</strong> "
-        f"{_status_form(job)}</dd>"
+        f"<dt>Eligibility</dt><dd>"
+        f"{_badge(job.eligibility.value, _ELIGIBILITY_TONE)}{reasons}</dd>"
+        f"<dt>Workflow Status</dt>"
+        f"<dd>{_badge(job.status.value, _STATUS_TONE)}</dd>"
         f"<dt>Application URL</dt><dd>{_application_url_link(job.application_url)}"
         "</dd>"
         f"<dt>First seen</dt><dd>{_esc(job.first_seen_at)}</dd>"
         f"<dt>Last seen</dt><dd>{_esc(job.last_seen_at)}</dd>"
-        "</dl>"
-        "<h2>Match evidence</h2>"
-        f"<p><strong>Matched skills</strong>{matched}</p>"
-        f"<p><strong>Missing required skills</strong>{missing}</p>"
-        '<p class="muted">Status changes are manual; eligibility and match '
+        "</dl></section>"
+        '<section class="card"><h2>Match evidence</h2>'
+        f'<p class="evidence-head">Matched skills</p>{matched}'
+        f'<p class="evidence-head">Missing required skills</p>{missing}'
+        '<p class="note">Status changes are manual; eligibility and match '
         "never change them.</p>"
+        "</section>"
+        "</div></main>"
     )
     return _page(f"JOB-{job.job_id}", body)
 
 
 def render_error(message: str) -> str:
     """A minimal error page."""
-    return _page("Error", f"<h1>Error</h1><p>{_esc(message)}</p>")
+    return _page(
+        "Error",
+        '<main class="wrap">'
+        '<div class="card error-card">'
+        "<h1>Something went wrong</h1>"
+        f"<p>{_esc(message)}</p>"
+        '<p class="muted"><a href="/">&larr; Back to the dashboard</a></p>'
+        "</div></main>",
+    )
 
 
 class DashboardHTTPServer(HTTPServer):
@@ -270,8 +586,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             query = parse_qs(parts.query)
             raw_status = query.get("status", [None])[0]
             status = WorkflowStatus(raw_status) if raw_status else None
-            jobs = list_eligible_jobs(self.server.store, status)
-            self._send(200, render_index(jobs, status))
+            # One pass over the eligible set: the cards/chips count all of
+            # it, the table shows the status-filtered slice of it.
+            eligible = list_eligible_jobs(self.server.store)
+            jobs = (
+                eligible
+                if status is None
+                else tuple(job for job in eligible if job.status is status)
+            )
+            self._send(200, render_index(jobs, status, eligible))
             return
 
         match = _STATUS_PATH.fullmatch(parts.path)

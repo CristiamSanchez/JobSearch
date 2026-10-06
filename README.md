@@ -1140,20 +1140,23 @@ valid state.
 
 ### The dashboard
 
-The primary table: **ID · Position · Company · Location · Match ·
-Status**, plus an action form offering only the currently allowed next
-statuses:
+The primary view: summary cards, a status-filter chip bar, then the table
+of eligible jobs — **Job (id + title, company · location) · Eligibility ·
+Match · Status**, plus an action form offering only the currently allowed
+next statuses:
 
-| ID | Position | Company | Match | Status |
-|----|----------|---------|-------|--------|
-| JOB-123 | QA Automation Engineer | Acme | 87% | FOUND |
-| JOB-124 | QA Engineer | Example | 81% | REVIEWED |
-| JOB-125 | Software Tester | Company X | 74% | SAVED |
-| JOB-126 | QA Analyst | Company Y | 69% | APPLIED |
+| Job | Eligibility | Match | Status |
+|-----|-------------|-------|--------|
+| JOB-123 · QA Automation Engineer · Acme | ELIGIBLE | 87% | FOUND |
+| JOB-124 · QA Engineer · Example | ELIGIBLE | 81% | REVIEWED |
+| JOB-125 · Software Tester · Company X | ELIGIBLE | 74% | SAVED |
+| JOB-126 · QA Analyst · Company Y | ELIGIBLE | 69% | APPLIED |
 
+- **Summary cards:** `Total`, `Found`, `Applied`, `Interview`, `Offer` —
+  counted over the whole eligible set, so a filter never hides them.
 - **Filters:** `All`, `Found`, `Reviewed`, `Saved`, `Applied`,
-  `Interview`, `Offer`, `Rejected`, `Closed` — all within the eligible
-  set.
+  `Interview`, `Offer`, `Rejected`, `Closed` — each chip shows its live
+  count, all within the eligible set.
 - **Status actions:** change the status from the table or the detail
   view; each change is validated against the transition table and
   persisted to SQLite, so refreshing the dashboard preserves it.
@@ -1163,6 +1166,9 @@ statuses:
   evidence (matched and missing skills).
 - The visible job ID is the Phase 4C `job_id` (`JOB-123`); email ids are
   never used as the job identity.
+- Statuses and eligibility render as small coloured badges; on narrow
+  screens the table rows collapse into stacked, labelled blocks (one
+  inline `@media` rule, no framework and no JavaScript).
 
 ### SQLite is the source of truth
 
@@ -1575,6 +1581,141 @@ Stop it with `Ctrl+C`. See *MVP Command Center (Phase 5)*.
   `Settings` representation hides `AI_API_KEY`.
 - The dashboard is a local MVP — loopback bind, no authentication, no
   deployment infrastructure.
+
+## How to use the MVP
+
+A short, copy-paste walkthrough for someone who has never opened this
+repository. Every command below already exists in
+[Getting started](#getting-started) — nothing here adds a feature.
+
+### Run it in four steps
+
+1. **Open a terminal** and go to the project directory:
+
+   ```bash
+   cd JobSearch
+   ```
+
+2. **Activate the virtual environment**, if you have one:
+
+   ```bash
+   source .venv/bin/activate
+   ```
+
+3. **Start the dashboard.** Manual commands are prefixed with
+   `PYTHONPATH=src` (see *Python virtual environment*):
+
+   ```bash
+   PYTHONPATH=src .venv/bin/python -m jobsearch.dashboard
+   # → JobSearch AI Command Center → http://127.0.0.1:8000
+   ```
+
+   Keep that terminal open: the dashboard is a local server and nothing
+   runs in the background. Stop it with `Ctrl+C`.
+
+4. **Open this URL in the browser:**
+
+   <http://127.0.0.1:8000>
+
+### Local URLs
+
+The MVP has **no HTTP API** — there is no `/api/...` route anywhere in the
+project, and the dashboard is the only browser-facing surface. These are
+all the routes that exist:
+
+| URL | What it does |
+|-----|--------------|
+| `http://127.0.0.1:8000/` | Job list (the home page) |
+| `http://127.0.0.1:8000/?status=FOUND` | The same list filtered to one workflow status. Valid values: `FOUND`, `REVIEWED`, `SAVED`, `APPLIED`, `INTERVIEW`, `OFFER`, `REJECTED`, `CLOSED` |
+| `http://127.0.0.1:8000/job/1` | Detail page for one job. The number is the `JOB-<id>` chip of a row **visible in the list** |
+
+Behaviour of the current implementation:
+
+- an unknown status value (for example `/?status=NOPE`) returns **400**;
+- any other path returns **404** — including `/job/<id>` for a job that
+  is not eligible, which is expected rather than a bug;
+- the links rendered on the page (filter chips, job titles, *Back to
+  dashboard*) are all the navigation you need.
+
+### What should I see?
+
+The dashboard shows **the jobs the system obtained** (through the manual
+Gmail sync or manual ingestion), each one with:
+
+- an **eligibility result** — can this candidate realistically apply? It
+  is computed once by the analyzer and never changed from the UI;
+- a **professional match** percentage — how well the posting fits the
+  profile. Informational only: it never hides, sorts, or excludes
+  anything;
+- a **workflow status** — where the job currently sits in *your*
+  application process. Only you change it.
+
+**Summary cards** (top row): `Total` (every eligible job) plus how many
+sit in `Found`, `Applied`, `Interview`, and `Offer`.
+
+**Filters** (second row): one chip per workflow status plus `All`, each
+showing its live count. `All` (the home URL) clears the filter.
+
+**Job list** — one row per eligible job:
+
+| Column | What it contains |
+|--------|------------------|
+| Job | The `JOB-<id>` chip, the **title** (clickable → detail page), then **company · location** |
+| Eligibility | The `ELIGIBLE` badge — that is the only eligibility status that ever reaches this list |
+| Match | The professional match, rendered as `NN%` |
+| Status | The workflow-status badge |
+| Change status | A select + `Set` button that advances the status. Only transitions allowed from the current status are offered; a terminal status shows `terminal` instead |
+
+#### Eligibility (computed, read-only)
+
+| Status | In plain language |
+|--------|-------------------|
+| `ELIGIBLE` | The posting matches the candidate profile's rules (for example a remote LATAM role). The only status the dashboard displays |
+| `NOT_ELIGIBLE` | Clearly not applicable (for example on-site, hybrid, or US-only) |
+| `REVIEW_REQUIRED` | It could fit, but something needs a human decision (for example a worldwide remote role) |
+| `UNKNOWN` | The posting does not contain enough information to decide |
+
+#### Workflow statuses (manual — only you change them)
+
+| Status | In plain language |
+|--------|-------------------|
+| `FOUND` | Discovered and analyzed; not reviewed yet (the default for every new job) |
+| `REVIEWED` | You looked at it; no decision yet |
+| `SAVED` | Worth keeping as a candidate |
+| `APPLIED` | You submitted the application |
+| `INTERVIEW` | The company invited you |
+| `OFFER` | You received an offer |
+| `REJECTED` | Rejected — terminal |
+| `CLOSED` | No longer active — terminal |
+
+Transitions follow `FOUND → REVIEWED → SAVED → APPLIED → INTERVIEW →
+OFFER`; skipping steps, going backwards, or reopening a terminal status
+is rejected. Neither eligibility nor the match score ever changes a
+status.
+
+#### Empty states
+
+An empty list says **`No eligible jobs yet.`** and explains why: jobs
+whose result was `NOT_ELIGIBLE`, `REVIEW_REQUIRED`, or `UNKNOWN` **stay
+in SQLite with their full analysis** — they are simply not listed. With a
+status filter active the message becomes
+`No eligible jobs with status <STATUS>.`
+
+### How to verify the MVP
+
+| # | Command | What success looks like |
+|---|---------|-------------------------|
+| 1 | `PYTHONPATH=src .venv/bin/python -m jobsearch.dashboard` | The terminal prints `JobSearch AI Command Center → http://127.0.0.1:8000`; the page opens in the browser (title `Command Center`) and `http://127.0.0.1:8000/` responds with HTTP **200** |
+| 2 | `pytest` (or `.venv/bin/python -m pytest`) | The last line reports `435 passed`, zero failures, exit code **0**. Fully offline: no key, credential, or network needed |
+| 3 | `PYTHONPATH=src .venv/bin/python -m jobsearch.gmail_sync` | A `Gmail sync summary` block with fixed counters (`Messages found`, `Messages processed`, `Jobs analyzed`, `New jobs created`, …) and exit code **0** |
+| 4 | `PYTHONPATH=src .venv/bin/python -m jobsearch.ai_check` | `AI extraction check (isolated, nothing persisted)` ending with `Result : succeeded (JSON object returned by the model)`, exit code **0** |
+| 5 | `PYTHONPATH=src .venv/bin/python -m jobsearch.gmail_check` | `Gmail OAuth connectivity check (read-only)` with `Gmail API connectivity   : succeeded`, exit code **0** |
+
+Steps 3–5 need the local configuration described in
+[Getting started](#getting-started) (`.env` with a valid `AI_API_KEY`, and
+`secrets/gmail_credentials.json` for the Gmail ones). All three utilities
+use the same exit codes: **0** success, **2** configuration/OAuth
+problem, **1** operational failure.
 
 ## Manual job ingestion
 
