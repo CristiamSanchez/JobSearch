@@ -7,9 +7,10 @@
 
 # ---------------------------------------------------------------------------
 # Optional — Phase 4A/6A Gmail adapter (only needed for the REAL manual
-# sync, `python -m jobsearch.gmail_sync`; `jobsearch.gmail.build_gmail_service`
+# sync, `PYTHONPATH=src python -m jobsearch.gmail_sync`;
+# `jobsearch.gmail.build_gmail_service`
 # imports them lazily and the test suite never does). The AI extraction step
-# needs no package at all (standard-library HTTP). Uncomment to install:
+# needs no package at all (standard-library HTTP).
 # ---------------------------------------------------------------------------
 google-api-python-client>=2.10
 google-auth>=2.23

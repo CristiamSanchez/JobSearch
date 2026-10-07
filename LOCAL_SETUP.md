@@ -262,7 +262,8 @@ server, nothing runs in the background.
 
 - `http://127.0.0.1:8000/` — job list (eligible jobs only)
 - `http://127.0.0.1:8000/?status=FOUND` — filtered by workflow status
-- `http://127.0.0.1:8000/job/1` — job detail page
+- `http://127.0.0.1:8000/job/1` — job detail page (requires a synced
+  database with at least one eligible job)
 
 ---
 
