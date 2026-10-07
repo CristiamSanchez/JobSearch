@@ -27,6 +27,10 @@ client_secret*.json
 data/*.db
 data/*.db-*
 
+# Real (personal) career profile — stays on this machine; the portfolio ships
+# the sanitized data/career_profile.example.json instead
+data/career_profile.json
+
 # Packaging / build artifacts
 build/
 dist/

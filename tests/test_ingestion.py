@@ -1,6 +1,8 @@
 """Tests for manual job and career-profile ingestion from JSON files."""
 
+import fnmatch
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -112,7 +114,9 @@ def test_load_jobs_reports_missing_file(tmp_path):
 
 
 def test_repository_career_profile_matches_candidate_rules():
-    profile = load_career_profile(DATA_DIR / "career_profile.json")
+    # The repository ships the sanitized example; the real profile is
+    # git-ignored and never part of a fresh clone.
+    profile = load_career_profile(DATA_DIR / "career_profile.example.json")
 
     assert profile.country == "Honduras"
     assert profile.region == "LATAM"
@@ -290,14 +294,65 @@ def test_load_career_profile_with_professional_fields(tmp_path):
 
 
 def test_repository_career_profile_exposes_professional_fields():
-    profile = load_career_profile(DATA_DIR / "career_profile.json")
-    # The schema is present even though the values ship empty for the user to fill in.
-    assert profile.skills == ()
-    assert profile.years_experience is None
-    assert profile.technologies == ()
-    assert profile.education == ()
-    assert profile.certifications == ()
-    assert profile.languages == ()
+    profile = load_career_profile(DATA_DIR / "career_profile.example.json")
+    # The shipped example is fully populated so the professional matcher can
+    # score a job instead of reporting "nothing to assess" everywhere.
+    assert profile.skills != ()
+    assert profile.years_experience is not None
+    assert profile.years_experience > 0
+    assert profile.technologies != ()
+    assert profile.education != ()
+    assert profile.certifications != ()
+    assert profile.languages != ()
+
+
+def test_example_career_profile_is_portfolio_safe():
+    """The committed example carries only professional, non-personal facts."""
+    example_path = DATA_DIR / "career_profile.example.json"
+    profile = load_career_profile(example_path)
+    raw = json.loads(example_path.read_text(encoding="utf-8"))
+
+    # Every field the application expects is present and populated.
+    assert {
+        "country",
+        "region",
+        "us_citizenship",
+        "us_green_card",
+        "us_opt",
+        "us_work_authorization",
+        "skills",
+        "years_experience",
+        "technologies",
+        "education",
+        "certifications",
+        "languages",
+    } <= set(raw)
+    assert isinstance(profile.years_experience, (int, float))
+    assert not isinstance(profile.years_experience, bool)
+    for name in ("skills", "technologies", "education", "certifications", "languages"):
+        assert getattr(profile, name)
+        assert all(isinstance(item, str) and item.strip() for item in getattr(profile, name))
+
+    # No contact details or credentials ever ship to a public repository.
+    forbidden_keys = {"password", "api_key", "token", "secret", "email", "phone", "address"}
+    assert not forbidden_keys & set(raw)
+    text = json.dumps(raw)
+    assert "@" not in text
+    assert re.search(r"\+\d[\d\s-]{6,}", text) is None
+
+
+def test_example_profile_is_shipped_and_real_profile_stays_local():
+    """Only the example travels to Git; the real profile stays on this machine."""
+    ignore_lines = [
+        line.strip()
+        for line in (DATA_DIR.parent / ".gitignore").read_text(encoding="utf-8").splitlines()
+    ]
+    assert "data/career_profile.json" in ignore_lines
+
+    example = "data/career_profile.example.json"
+    patterns = [line for line in ignore_lines if line and not line.startswith("#")]
+    assert example not in patterns
+    assert not any(fnmatch.fnmatch(example, pattern) for pattern in patterns)
 
 
 def test_load_job_posting_with_extracted_metadata(tmp_path):

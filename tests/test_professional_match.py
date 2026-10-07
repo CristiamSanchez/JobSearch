@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import fields
+from pathlib import Path
 
 import pytest
 
 from jobsearch.eligibility import evaluate_eligibility
+from jobsearch.ingestion import load_career_profile
 from jobsearch.models import (
     CandidateProfile,
     EligibilityStatus,
@@ -14,6 +16,8 @@ from jobsearch.models import (
     ProfessionalMatch,
 )
 from jobsearch.professional_match import DIMENSION_WEIGHTS, evaluate_professional_match
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
 def make_profile(**overrides) -> CandidateProfile:
@@ -398,3 +402,48 @@ def test_eligible_job_can_have_low_professional_match():
     assert result.score <= 0.3
     assert result.score == pytest.approx(0.1429)
     assert eligibility.status is EligibilityStatus.ELIGIBLE
+
+
+# --- Shipped example profile (data/career_profile.example.json) -----------
+
+
+def test_example_profile_reproduces_the_documented_match():
+    """The committed example scores the documented example job at 0.95.
+
+    The portfolio must ship a profile the engine can actually assess, so the
+    shipped file has to reproduce the results the README documents for the
+    hand-written reference profile.
+    """
+    profile = load_career_profile(DATA_DIR / "career_profile.example.json")
+    posting = make_posting(
+        required_skills=("Python", "FastAPI", "PostgreSQL"),
+        preferred_skills=("Kubernetes", "Terraform"),
+        min_experience_years=5,
+        technologies=("Python", "AWS"),
+        education=("Bachelor's degree",),
+        certifications=("AWS Solutions Architect",),
+        languages=("English",),
+    )
+
+    result = match(posting, profile)
+
+    assert result.score == pytest.approx(0.95)
+    assert result.matched_skills
+    assert result.experience_matches
+    assert result.missing_required_skills == ()
+
+
+def test_example_profile_covers_the_qa_stack():
+    """The QA/automation stack advertised by the example really scores."""
+    profile = load_career_profile(DATA_DIR / "career_profile.example.json")
+    posting = make_posting(
+        required_skills=("Python", "Selenium", "Playwright", "Postman", "REST APIs"),
+        min_experience_years=4,
+        technologies=("Python", "Docker"),
+    )
+
+    result = match(posting, profile)
+
+    assert result.score == pytest.approx(1.0)
+    assert result.missing_required_skills == ()
+    assert set(posting.required_skills) <= set(result.matched_skills)

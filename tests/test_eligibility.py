@@ -321,7 +321,7 @@ def test_reasons_preserve_concrete_matched_evidence():
 
 
 def test_repository_career_profile_drives_the_same_outcome():
-    profile = load_career_profile(DATA_DIR / "career_profile.json")
+    profile = load_career_profile(DATA_DIR / "career_profile.example.json")
     result = evaluate_eligibility(make_posting("Remote - LATAM"), profile)
 
     assert result.status is EligibilityStatus.ELIGIBLE

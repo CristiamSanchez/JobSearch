@@ -1,0 +1,45 @@
+{
+  "country": "Honduras",
+  "region": "LATAM",
+  "us_citizenship": false,
+  "us_green_card": false,
+  "us_opt": false,
+  "us_work_authorization": false,
+  "skills": [
+    "Software development",
+    "QA testing",
+    "Test automation",
+    "API testing",
+    "REST APIs",
+    "Python",
+    "Java",
+    "JavaScript",
+    "TypeScript",
+    "Playwright",
+    "Selenium",
+    "Postman",
+    "SQL",
+    "PostgreSQL",
+    "FastAPI",
+    "Docker",
+    "Kubernetes",
+    "Git",
+    "CI/CD"
+  ],
+  "years_experience": 6,
+  "technologies": [
+    "Python",
+    "AWS",
+    "Docker"
+  ],
+  "education": [
+    "Bachelor's in Computer Science"
+  ],
+  "certifications": [
+    "AWS Solutions Architect"
+  ],
+  "languages": [
+    "Spanish",
+    "English"
+  ]
+}
